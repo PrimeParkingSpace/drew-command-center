@@ -651,6 +651,50 @@ def api_activity():
     
     return jsonify(activities)
 
+MAC_SERVER_URL = os.environ.get('MAC_SERVER_URL', 'https://mac.primeparking.space')
+
+@app.route('/api/chat/live')
+@require_auth
+def api_chat_live():
+    """Proxy to Mac server's OpenClaw history endpoint for live chat."""
+    import urllib.request
+    import ssl
+    try:
+        after = request.args.get('after', '')
+        limit = request.args.get('limit', '100')
+        url = f"{MAC_SERVER_URL}/openclaw/history?limit={limit}"
+        if after:
+            url += f"&after={after}"
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            data = json.loads(resp.read())
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e), 'messages': []}), 200
+
+@app.route('/api/chat/live/send', methods=['POST'])
+@require_auth
+def api_chat_live_send():
+    """Proxy message send to Mac server → OpenClaw."""
+    import urllib.request
+    import ssl
+    try:
+        data = request.json
+        url = f"{MAC_SERVER_URL}/openclaw/send"
+        payload = json.dumps(data).encode()
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            result = json.loads(resp.read())
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/chat/messages')
 @require_auth
 def api_chat_messages():

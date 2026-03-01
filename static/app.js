@@ -84,6 +84,11 @@ class DrewCommandCenter {
     }
 
     loadPage(page) {
+        // Stop chat polling when leaving chat page
+        if (this.chatPollInterval && page !== 'chat') {
+            clearInterval(this.chatPollInterval);
+            this.chatPollInterval = null;
+        }
         // Update active nav item
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('active');
@@ -261,23 +266,72 @@ class DrewCommandCenter {
     }
 
     async loadChat() {
+        this.lastMessageId = null;
+        this.chatPollInterval = null;
         try {
-            const response = await fetch('/api/chat/messages');
-            const messages = await response.json();
-
-            this.allChatMessages = messages; // Store all messages
-            this.renderChatMessages(messages);
-            this.scrollChatToBottom();
+            // Try live feed from Mac server first
+            const response = await fetch('/api/chat/live?limit=200');
+            const data = await response.json();
             
-            // Clear any existing search
-            const searchInput = document.getElementById('chat-search');
-            if (searchInput) {
-                searchInput.value = '';
+            if (data.messages && data.messages.length > 0) {
+                this.allChatMessages = data.messages;
+                this.lastMessageId = data.last_id;
+                this.renderChatMessages(data.messages);
+                this.scrollChatToBottom();
+                this.chatSource = 'live';
+                
+                // Start polling for new messages every 3 seconds
+                this.startChatPolling();
+            } else {
+                // Fallback to stored messages
+                const fallback = await fetch('/api/chat/messages');
+                const messages = await fallback.json();
+                this.allChatMessages = messages;
+                this.renderChatMessages(messages);
+                this.scrollChatToBottom();
+                this.chatSource = 'stored';
             }
+            
+            const searchInput = document.getElementById('chat-search');
+            if (searchInput) searchInput.value = '';
         } catch (error) {
             console.error('Error loading chat:', error);
-            this.showError('Failed to load chat messages');
+            // Fallback to stored
+            try {
+                const fallback = await fetch('/api/chat/messages');
+                const messages = await fallback.json();
+                this.allChatMessages = messages;
+                this.renderChatMessages(messages);
+                this.scrollChatToBottom();
+                this.chatSource = 'stored';
+            } catch (e) {
+                this.showError('Failed to load chat');
+            }
         }
+    }
+
+    startChatPolling() {
+        if (this.chatPollInterval) clearInterval(this.chatPollInterval);
+        this.chatPollInterval = setInterval(async () => {
+            if (this.currentPage !== 'chat') return;
+            try {
+                const url = this.lastMessageId 
+                    ? `/api/chat/live?after=${this.lastMessageId}&limit=50`
+                    : '/api/chat/live?limit=200';
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.messages && data.messages.length > 0) {
+                    for (const msg of data.messages) {
+                        this.allChatMessages.push(msg);
+                        this.addMessageToChat(msg);
+                    }
+                    this.lastMessageId = data.last_id;
+                    this.scrollChatToBottom();
+                }
+            } catch (e) {
+                // Silent fail on poll
+            }
+        }, 3000);
     }
 
     renderChatMessages(messages) {
@@ -297,42 +351,46 @@ class DrewCommandCenter {
     async sendMessage() {
         const chatInput = document.getElementById('chat-input');
         const message = chatInput.value.trim();
-
         if (!message) return;
 
-        // Clear input and show typing indicator
         chatInput.value = '';
         this.autoResizeTextarea(chatInput);
-        this.showTypingIndicator();
 
-        try {
-            const response = await fetch('/api/chat/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ content: message })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to send message');
-            }
-
-            const result = await response.json();
-            
-            // Add messages to chat
-            this.addMessageToChat(result.user_message);
-            
-            // Simulate Drew typing delay
-            setTimeout(() => {
+        if (this.chatSource === 'live') {
+            // Send to OpenClaw via Mac server
+            this.showTypingIndicator();
+            try {
+                await fetch('/api/chat/live/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                // Response will appear via polling — Drew will reply through OpenClaw
+                // Hide typing after 30s max (polling will show the real response)
+                setTimeout(() => this.hideTypingIndicator(), 30000);
+            } catch (e) {
                 this.hideTypingIndicator();
-                this.addMessageToChat(result.assistant_message);
-            }, 1500);
-
-        } catch (error) {
-            console.error('Error sending message:', error);
-            this.hideTypingIndicator();
-            this.showError('Failed to send message');
+                this.showError('Failed to send message');
+            }
+        } else {
+            // Fallback to stored chat
+            this.showTypingIndicator();
+            try {
+                const response = await fetch('/api/chat/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: message })
+                });
+                const result = await response.json();
+                this.addMessageToChat(result.user_message);
+                setTimeout(() => {
+                    this.hideTypingIndicator();
+                    this.addMessageToChat(result.assistant_message);
+                }, 1500);
+            } catch (e) {
+                this.hideTypingIndicator();
+                this.showError('Failed to send message');
+            }
         }
     }
 
