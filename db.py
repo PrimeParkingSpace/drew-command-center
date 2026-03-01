@@ -88,6 +88,22 @@ def init_db():
         )
     """)
     
+    # Create cost_tracking table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS cost_tracking (
+            id SERIAL PRIMARY KEY,
+            date DATE NOT NULL,
+            model VARCHAR(100),
+            input_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            cache_read_tokens INTEGER DEFAULT 0,
+            cache_write_tokens INTEGER DEFAULT 0,
+            estimated_cost DECIMAL(10,4) DEFAULT 0,
+            session_count INTEGER DEFAULT 0,
+            notes TEXT
+        )
+    """)
+    
     # Insert some sample data if tables are empty
     cur.execute("SELECT COUNT(*) FROM tasks")
     task_count = cur.fetchone()[0]

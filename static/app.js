@@ -3,6 +3,7 @@
 class DrewCommandCenter {
     constructor() {
         this.currentPage = 'dashboard';
+        this.allChatMessages = []; // Store all messages for filtering
         this.init();
     }
 
@@ -52,6 +53,14 @@ class DrewCommandCenter {
         if (chatInput) {
             chatInput.addEventListener('input', () => {
                 this.autoResizeTextarea(chatInput);
+            });
+        }
+
+        // Chat search functionality
+        const chatSearch = document.getElementById('chat-search');
+        if (chatSearch) {
+            chatSearch.addEventListener('input', (e) => {
+                this.filterChatMessages(e.target.value);
             });
         }
     }
@@ -253,8 +262,15 @@ class DrewCommandCenter {
             const response = await fetch('/api/chat/messages');
             const messages = await response.json();
 
+            this.allChatMessages = messages; // Store all messages
             this.renderChatMessages(messages);
             this.scrollChatToBottom();
+            
+            // Clear any existing search
+            const searchInput = document.getElementById('chat-search');
+            if (searchInput) {
+                searchInput.value = '';
+            }
         } catch (error) {
             console.error('Error loading chat:', error);
             this.showError('Failed to load chat messages');
@@ -331,6 +347,23 @@ class DrewCommandCenter {
         `;
         
         chatMessages.appendChild(messageDiv);
+        // Also add to allChatMessages for search
+        this.allChatMessages.push(message);
+        this.scrollChatToBottom();
+    }
+
+    filterChatMessages(searchTerm) {
+        if (!searchTerm.trim()) {
+            // Show all messages if search is empty
+            this.renderChatMessages(this.allChatMessages);
+        } else {
+            // Filter messages that contain the search term (case insensitive)
+            const filteredMessages = this.allChatMessages.filter(message =>
+                message.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                message.role.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            this.renderChatMessages(filteredMessages);
+        }
         this.scrollChatToBottom();
     }
 
@@ -388,35 +421,228 @@ class DrewCommandCenter {
             const response = await fetch('/api/stats');
             const stats = await response.json();
 
-            // Update stats page
+            // Update stats page with enhanced data
             const statsContent = document.getElementById('stats-content');
             statsContent.innerHTML = `
+                <!-- Summary Stats -->
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value">${stats.api_calls || 0}</div>
-                        <div class="stat-label">API Calls Today</div>
+                        <div class="stat-value">${stats.total_tasks || 0}</div>
+                        <div class="stat-label">Total Tasks</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$${stats.cost_today || '0.00'}</div>
-                        <div class="stat-label">Cost Today</div>
+                        <div class="stat-value">${stats.total_activity_entries || 0}</div>
+                        <div class="stat-label">Activity Entries</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${stats.uptime || '99.9%'}</div>
-                        <div class="stat-label">Uptime</div>
+                        <div class="stat-value">${stats.total_chat_messages || 0}</div>
+                        <div class="stat-label">Chat Messages</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${stats.messages_today || 0}</div>
-                        <div class="stat-label">Messages Today</div>
+                        <div class="stat-value">${stats.days_since_first_boot || 0}</div>
+                        <div class="stat-label">Days Since First Boot</div>
                     </div>
                 </div>
+
+                <!-- Task Status Breakdown -->
                 <div class="card">
-                    <h3>Usage Trends</h3>
-                    <p class="text-muted">Detailed analytics coming soon...</p>
+                    <h3>Task Status Breakdown</h3>
+                    <div class="stats-breakdown">
+                        ${Object.entries(stats.task_status_breakdown || {}).map(([status, count]) => `
+                            <div class="breakdown-item">
+                                <span class="status-indicator status-${status}">
+                                    <div class="status-dot"></div>
+                                    ${status}
+                                </span>
+                                <span class="breakdown-count">${count}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Activity Breakdown -->
+                <div class="card">
+                    <h3>Activity Types</h3>
+                    <div class="stats-breakdown">
+                        ${(stats.activity_breakdown || []).map(item => `
+                            <div class="breakdown-item">
+                                <span>${item.action.replace('_', ' ')}</span>
+                                <span class="breakdown-count">${item.count}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Most Active Categories -->
+                <div class="card">
+                    <h3>Most Active Categories</h3>
+                    <div class="stats-breakdown">
+                        ${(stats.active_categories || []).map(cat => `
+                            <div class="breakdown-item">
+                                <span>${cat.category}</span>
+                                <span class="breakdown-count">${cat.count}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Cost Tracking Section -->
+                <div class="card">
+                    <h3>💰 Cost Tracking</h3>
+                    <div class="stats-grid" style="margin-bottom: 1.5rem;">
+                        <div class="stat-card">
+                            <div class="stat-value">$${stats.total_estimated_cost.toFixed(2)}</div>
+                            <div class="stat-label">Total Estimated Spend</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">$${stats.avg_daily_cost.toFixed(2)}</div>
+                            <div class="stat-label">Average Daily Cost</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${(stats.total_tokens / 1000000).toFixed(1)}M</div>
+                            <div class="stat-label">Total Tokens</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${(stats.cost_by_model || []).length}</div>
+                            <div class="stat-label">Models Used</div>
+                        </div>
+                    </div>
+
+                    <!-- Cost by Model -->
+                    <h4>Cost by Model</h4>
+                    <div class="stats-breakdown" style="margin-bottom: 1.5rem;">
+                        ${(stats.cost_by_model || []).map(model => `
+                            <div class="breakdown-item">
+                                <span>${model.model}</span>
+                                <span class="breakdown-count">$${parseFloat(model.cost).toFixed(2)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- Daily Cost Chart -->
+                    <h4>Daily Cost Trend</h4>
+                    <div style="position: relative; height: 300px; margin-top: 1rem;">
+                        <canvas id="costChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Weekly Tasks Chart -->
+                <div class="card">
+                    <h3>📊 Tasks Completed (Weekly)</h3>
+                    <div style="position: relative; height: 300px; margin-top: 1rem;">
+                        <canvas id="weeklyTasksChart"></canvas>
+                    </div>
                 </div>
             `;
+
+            // Load Chart.js and create charts
+            this.loadCharts(stats);
+
         } catch (error) {
             console.error('Error loading stats:', error);
             this.showError('Failed to load stats');
+        }
+    }
+
+    loadCharts(stats) {
+        // Load Chart.js if not already loaded
+        if (typeof Chart === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js';
+            script.onload = () => this.createCharts(stats);
+            document.head.appendChild(script);
+        } else {
+            this.createCharts(stats);
+        }
+    }
+
+    createCharts(stats) {
+        // Cost Chart
+        const costCtx = document.getElementById('costChart');
+        if (costCtx) {
+            const costLabels = stats.daily_costs.map(d => new Date(d.date).toLocaleDateString());
+            const costData = stats.daily_costs.map(d => parseFloat(d.estimated_cost));
+
+            new Chart(costCtx, {
+                type: 'line',
+                data: {
+                    labels: costLabels,
+                    datasets: [{
+                        label: 'Daily Cost ($)',
+                        data: costData,
+                        borderColor: '#6c5ce7',
+                        backgroundColor: 'rgba(108, 92, 231, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e0e0e0' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#8b8fa3' },
+                            grid: { color: '#1e2040' }
+                        },
+                        y: {
+                            ticks: { 
+                                color: '#8b8fa3',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            },
+                            grid: { color: '#1e2040' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Weekly Tasks Chart
+        const weeklyCtx = document.getElementById('weeklyTasksChart');
+        if (weeklyCtx && stats.weekly_completed) {
+            const weeklyLabels = stats.weekly_completed.map(w => 
+                new Date(w.week).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            );
+            const weeklyData = stats.weekly_completed.map(w => w.completed);
+
+            new Chart(weeklyCtx, {
+                type: 'bar',
+                data: {
+                    labels: weeklyLabels,
+                    datasets: [{
+                        label: 'Tasks Completed',
+                        data: weeklyData,
+                        backgroundColor: '#28c840',
+                        borderColor: '#28c840',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e0e0e0' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#8b8fa3' },
+                            grid: { color: '#1e2040' }
+                        },
+                        y: {
+                            ticks: { color: '#8b8fa3' },
+                            grid: { color: '#1e2040' }
+                        }
+                    }
+                }
+            });
         }
     }
 

@@ -124,7 +124,7 @@ def api_stats():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
-    # Get stats
+    # Basic counts
     cur.execute("SELECT COUNT(*) FROM tasks WHERE status = 'active'")
     active_tasks = cur.fetchone()['count']
     
@@ -137,17 +137,123 @@ def api_stats():
     cur.execute("SELECT COUNT(*) FROM chat_messages WHERE DATE(timestamp) = CURRENT_DATE")
     messages_today = cur.fetchone()['count']
     
+    # Enhanced stats
+    
+    # Total counts
+    cur.execute("SELECT COUNT(*) as total, status FROM tasks GROUP BY status")
+    task_status_breakdown = dict((row['status'], row['total']) for row in cur.fetchall())
+    
+    cur.execute("SELECT COUNT(*) FROM activity_log")
+    total_activity_entries = cur.fetchone()['count']
+    
+    cur.execute("SELECT COUNT(*) FROM chat_messages")
+    total_chat_messages = cur.fetchone()['count']
+    
+    # Tasks completed per week (last 4 weeks)
+    cur.execute("""
+        SELECT DATE_TRUNC('week', completed_at) as week, COUNT(*) as completed
+        FROM tasks 
+        WHERE completed_at >= CURRENT_DATE - INTERVAL '4 weeks'
+        GROUP BY week
+        ORDER BY week
+    """)
+    weekly_completed = cur.fetchall()
+    
+    # Most active categories
+    cur.execute("""
+        SELECT category, COUNT(*) as count
+        FROM tasks 
+        WHERE category IS NOT NULL AND category != ''
+        GROUP BY category
+        ORDER BY count DESC
+        LIMIT 5
+    """)
+    active_categories = cur.fetchall()
+    
+    # Activity by type breakdown
+    cur.execute("""
+        SELECT action, COUNT(*) as count
+        FROM activity_log
+        GROUP BY action
+        ORDER BY count DESC
+        LIMIT 10
+    """)
+    activity_breakdown = cur.fetchall()
+    
+    # First activity date
+    cur.execute("SELECT MIN(timestamp) as first_activity FROM activity_log")
+    first_activity_row = cur.fetchone()
+    first_activity = first_activity_row['first_activity'] if first_activity_row['first_activity'] else None
+    
+    days_since_first = None
+    if first_activity:
+        days_since_first = (datetime.now() - first_activity).days
+    
+    # Cost tracking data
+    cur.execute("""
+        SELECT 
+            SUM(estimated_cost) as total_cost,
+            AVG(estimated_cost) as avg_daily_cost,
+            SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) as total_tokens
+        FROM cost_tracking
+    """)
+    cost_summary = cur.fetchone()
+    
+    # Daily costs for chart
+    cur.execute("""
+        SELECT date, estimated_cost, model, 
+               input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+        FROM cost_tracking 
+        ORDER BY date
+    """)
+    daily_costs = cur.fetchall()
+    
+    # Cost by model
+    cur.execute("""
+        SELECT model, SUM(estimated_cost) as cost, COUNT(*) as days
+        FROM cost_tracking
+        GROUP BY model
+        ORDER BY cost DESC
+    """)
+    cost_by_model = cur.fetchall()
+    
     cur.close()
     conn.close()
     
+    # Format dates for JSON serialization
+    for week_data in weekly_completed:
+        if week_data['week']:
+            week_data['week'] = week_data['week'].isoformat()
+    
+    for cost_data in daily_costs:
+        if cost_data['date']:
+            cost_data['date'] = cost_data['date'].isoformat()
+    
     return jsonify({
+        # Basic dashboard stats
         'active_tasks': active_tasks,
         'completed_today': completed_today,
         'scheduled_jobs': scheduled_jobs,
         'messages_today': messages_today,
-        'uptime': '99.9%',  # Placeholder
-        'api_calls': 1247,  # Placeholder
-        'cost_today': 4.32  # Placeholder
+        'uptime': '99.9%',
+        
+        # Enhanced stats
+        'total_tasks': sum(task_status_breakdown.values()),
+        'task_status_breakdown': task_status_breakdown,
+        'total_activity_entries': total_activity_entries,
+        'total_chat_messages': total_chat_messages,
+        'weekly_completed': weekly_completed,
+        'active_categories': active_categories,
+        'activity_breakdown': activity_breakdown,
+        'first_activity': first_activity.isoformat() if first_activity else None,
+        'days_since_first_boot': days_since_first,
+        
+        # Cost tracking
+        'total_estimated_cost': float(cost_summary['total_cost'] or 0),
+        'avg_daily_cost': float(cost_summary['avg_daily_cost'] or 0),
+        'total_tokens': int(cost_summary['total_tokens'] or 0),
+        'daily_costs': daily_costs,
+        'cost_by_model': cost_by_model
     })
 
 @app.route('/api/tasks')
@@ -354,6 +460,37 @@ def api_chat_messages():
     
     messages = cur.fetchall()
     messages.reverse()  # Show oldest first
+    
+    cur.close()
+    conn.close()
+    
+    # Convert datetime objects to ISO format
+    for message in messages:
+        if message['timestamp']:
+            message['timestamp'] = message['timestamp'].isoformat()
+    
+    return jsonify(messages)
+
+@app.route('/api/chat/search')
+@require_auth
+def api_chat_search():
+    query = request.args.get('q', '').strip()
+    
+    if not query:
+        return jsonify([])
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # Search chat messages using ILIKE for case-insensitive search
+    cur.execute("""
+        SELECT * FROM chat_messages 
+        WHERE content ILIKE %s OR role ILIKE %s
+        ORDER BY timestamp DESC 
+        LIMIT 50
+    """, (f'%{query}%', f'%{query}%'))
+    
+    messages = cur.fetchall()
     
     cur.close()
     conn.close()

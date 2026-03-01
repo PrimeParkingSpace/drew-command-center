@@ -178,6 +178,30 @@ body {
     letter-spacing: 0.5px;
 }
 
+/* Stats breakdown */
+.stats-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #1e2040;
+}
+
+.breakdown-item:last-child {
+    border-bottom: none;
+}
+
+.breakdown-count {
+    font-weight: 600;
+    color: #6c5ce7;
+}
+
 /* Buttons */
 .btn {
     display: inline-flex;
@@ -323,6 +347,46 @@ body {
 .chat-header h2 {
     color: #6c5ce7;
     margin: 0;
+}
+
+/* Chat search */
+.chat-search-container {
+    position: relative;
+    margin-top: 1rem;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.chat-search-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    padding-right: 2.5rem;
+    border: 1px solid #1e2040;
+    border-radius: 20px;
+    background: #0a0a1a;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.chat-search-input:focus {
+    border-color: #6c5ce7;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+.chat-search-input::placeholder {
+    color: #4a5568;
+}
+
+.search-icon {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b8fa3;
+    pointer-events: none;
 }
 
 .chat-messages {
