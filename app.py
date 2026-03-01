@@ -570,6 +570,93 @@ def api_chat_send():
         'assistant_message': drew_message
     })
 
+@app.route('/api/costs/refresh', methods=['POST'])
+@require_auth
+def api_costs_refresh():
+    """Pull real usage data from Anthropic Usage API and update cost_tracking table"""
+    import urllib.request
+    import ssl
+    
+    admin_key = os.environ.get('ANTHROPIC_ADMIN_KEY', '')
+    if not admin_key:
+        return jsonify({'error': 'ANTHROPIC_ADMIN_KEY not configured'}), 500
+    
+    pricing = {
+        'claude-opus-4-6': {'input': 15, 'output': 75, 'cr': 1.875, 'cw5': 18.75, 'cw1': 22.50},
+        'claude-sonnet-4-20250514': {'input': 3, 'output': 15, 'cr': 0.375, 'cw5': 3.75, 'cw1': 4.50},
+        'claude-3-5-sonnet-20241022': {'input': 3, 'output': 15, 'cr': 0.375, 'cw5': 3.75, 'cw1': 3.75},
+    }
+    
+    # Fetch all pages from Anthropic
+    all_buckets = []
+    page = None
+    ctx = ssl.create_default_context()
+    
+    try:
+        while True:
+            url = (
+                f"https://api.anthropic.com/v1/organizations/usage_report/messages?"
+                f"starting_at=2026-02-17T00:00:00Z&"
+                f"ending_at={datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}&"
+                f"bucket_width=1d&group_by[]=model"
+            )
+            if page:
+                url += f"&page={page}"
+            
+            req = urllib.request.Request(url, headers={
+                'anthropic-version': '2023-06-01',
+                'x-api-key': admin_key
+            })
+            with urllib.request.urlopen(req, context=ctx) as resp:
+                d = json.loads(resp.read())
+            
+            all_buckets.extend(d.get('data', []))
+            if not d.get('has_more'):
+                break
+            page = d.get('next_page')
+        
+        # Update database
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM cost_tracking")
+        
+        total_cost = 0
+        rows = 0
+        for bucket in all_buckets:
+            date = bucket['starting_at'][:10]
+            for r in bucket['results']:
+                model = r.get('model') or 'unknown'
+                p = pricing.get('claude-opus-4-6')
+                for k in pricing:
+                    if k in model:
+                        p = pricing[k]
+                        break
+                
+                inp = r['uncached_input_tokens']
+                c5 = r['cache_creation']['ephemeral_5m_input_tokens']
+                c1 = r['cache_creation']['ephemeral_1h_input_tokens']
+                cr = r['cache_read_input_tokens']
+                out = r['output_tokens']
+                
+                cost = (inp*p['input'] + out*p['output'] + cr*p['cr'] + c5*p['cw5'] + c1*p.get('cw1', p['cw5'])) / 1e6
+                total_cost += cost
+                rows += 1
+                
+                cur.execute("""
+                    INSERT INTO cost_tracking (date, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (date, model, inp, out, cr, c5+c1, round(cost, 4), 'Anthropic Usage API'))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'status': 'ok', 'rows': rows, 'total_cost': round(total_cost, 2)})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
