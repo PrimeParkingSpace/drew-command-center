@@ -123,6 +123,9 @@ class DrewCommandCenter {
             case 'stats':
                 this.loadStats();
                 break;
+            case 'models':
+                this.loadModels();
+                break;
         }
 
         // Close mobile menu
@@ -808,10 +811,253 @@ class DrewCommandCenter {
             if (btn) { btn.textContent = '🔄 Refresh from Anthropic'; btn.disabled = false; }
         }
     }
+
+    async loadModels() {
+        try {
+            const [modelsResponse, activeResponse, statsResponse] = await Promise.all([
+                fetch('/api/models'),
+                fetch('/api/models/active'),
+                fetch('/api/stats')
+            ]);
+
+            const models = await modelsResponse.json();
+            const activeData = await activeResponse.json();
+            const stats = await statsResponse.json();
+
+            const activeModel = activeData.active_model;
+            
+            this.renderCurrentModel(models, activeModel);
+            this.renderCostSavings(models, activeModel, stats);
+            this.renderModelsGrid(models, activeModel);
+
+        } catch (error) {
+            console.error('Error loading models:', error);
+            this.showError('Failed to load models data');
+        }
+    }
+
+    renderCurrentModel(models, activeModelId) {
+        const currentModel = models.find(m => m.id === activeModelId);
+        if (!currentModel) return;
+
+        const currentModelDisplay = document.getElementById('current-model-display');
+        currentModelDisplay.innerHTML = `
+            <div class="current-model-display">
+                <div class="current-model-info">
+                    <div class="current-model-name">
+                        ${currentModel.provider_emoji} ${currentModel.name}
+                    </div>
+                    <div class="current-model-desc">
+                        ${currentModel.description}
+                    </div>
+                    <div class="current-model-pricing">
+                        <span>Input: $${currentModel.pricing.input}/M</span>
+                        <span>Output: $${currentModel.pricing.output}/M</span>
+                        ${currentModel.pricing.cache_read > 0 ? `<span>Cache: $${currentModel.pricing.cache_read}/M</span>` : ''}
+                    </div>
+                </div>
+                <div class="model-ratings">
+                    <div class="rating-item">
+                        <div class="rating-label">Speed</div>
+                        <div class="rating-stars">
+                            ${this.renderStars(currentModel.speed)}
+                        </div>
+                    </div>
+                    <div class="rating-item">
+                        <div class="rating-label">Quality</div>
+                        <div class="rating-stars">
+                            ${this.renderStars(currentModel.quality)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderCostSavings(models, activeModelId, stats) {
+        const activeModel = models.find(m => m.id === activeModelId);
+        const sonnetModel = models.find(m => m.id === 'anthropic/claude-sonnet-4-20250514');
+        
+        if (!activeModel || !sonnetModel || activeModelId === sonnetModel.id) {
+            document.getElementById('cost-savings-content').innerHTML = `
+                <p class="text-muted">Cost savings analysis will appear when using a different model than Sonnet.</p>
+            `;
+            return;
+        }
+
+        // Calculate potential savings based on last week's Opus usage
+        const totalCost = stats.total_estimated_cost || 0;
+        const costRatio = sonnetModel.pricing.input / activeModel.pricing.input;
+        const potentialCost = totalCost * costRatio;
+        const savings = totalCost - potentialCost;
+        const savingsPercent = totalCost > 0 ? ((savings / totalCost) * 100) : 0;
+
+        const costSavingsContent = document.getElementById('cost-savings-content');
+        costSavingsContent.innerHTML = `
+            <div class="cost-savings-explanation">
+                <p>If you had run your recent workload on <strong>${sonnetModel.name}</strong> instead of <strong>${activeModel.name}</strong>, estimated savings:</p>
+            </div>
+            <div class="cost-savings-grid">
+                <div class="cost-comparison-item current">
+                    <div class="cost-amount current">$${totalCost.toFixed(2)}</div>
+                    <div class="cost-label">${activeModel.name}</div>
+                </div>
+                <div class="cost-comparison-item alternative">
+                    <div class="cost-amount alternative">$${potentialCost.toFixed(2)}</div>
+                    <div class="cost-label">${sonnetModel.name}</div>
+                </div>
+                <div class="cost-comparison-item savings">
+                    <div class="cost-amount savings">$${savings.toFixed(2)}</div>
+                    <div class="cost-label">Savings (${savingsPercent.toFixed(1)}%)</div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderModelsGrid(models, activeModelId) {
+        const modelsGrid = document.getElementById('models-grid');
+        
+        // Find cheapest model for comparison
+        const cheapestInputPrice = Math.min(...models.map(m => m.pricing.input));
+        
+        modelsGrid.innerHTML = models.map(model => {
+            const isActive = model.id === activeModelId;
+            const inputMultiplier = model.pricing.input / cheapestInputPrice;
+            
+            let priceClass = 'moderate';
+            let priceText = '';
+            
+            if (inputMultiplier === 1) {
+                priceClass = 'cheapest';
+                priceText = 'Most affordable';
+            } else if (inputMultiplier >= 5) {
+                priceClass = 'expensive';
+                priceText = `${inputMultiplier.toFixed(1)}x more expensive`;
+            } else {
+                priceClass = 'moderate';
+                priceText = `${inputMultiplier.toFixed(1)}x base price`;
+            }
+
+            return `
+                <div class="model-card ${isActive ? 'active' : ''}" data-model-id="${model.id}">
+                    <div class="model-header">
+                        <div class="model-title">
+                            <span class="provider-logo">${model.provider_emoji}</span>
+                            <div>
+                                <h4>${model.name}</h4>
+                                ${isActive ? '<div class="model-badge">Current Default</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="model-pricing">
+                        <div class="pricing-grid">
+                            <div class="pricing-item">
+                                <span>Input:</span>
+                                <span class="price">$${model.pricing.input}/M</span>
+                            </div>
+                            <div class="pricing-item">
+                                <span>Output:</span>
+                                <span class="price">$${model.pricing.output}/M</span>
+                            </div>
+                            ${model.pricing.cache_read > 0 ? `
+                            <div class="pricing-item">
+                                <span>Cache Read:</span>
+                                <span class="price">$${model.pricing.cache_read}/M</span>
+                            </div>
+                            <div class="pricing-item">
+                                <span>Cache Write:</span>
+                                <span class="price">$${model.pricing.cache_write}/M</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div class="price-comparison ${priceClass}">
+                            ${priceText}
+                        </div>
+                    </div>
+
+                    <div class="model-ratings">
+                        <div class="rating-item">
+                            <div class="rating-label">Speed</div>
+                            <div class="rating-stars">
+                                ${this.renderStars(model.speed)}
+                            </div>
+                            <div class="rating-value">${model.speed}/5</div>
+                        </div>
+                        <div class="rating-item">
+                            <div class="rating-label">Quality</div>
+                            <div class="rating-stars">
+                                ${this.renderStars(model.quality)}
+                            </div>
+                            <div class="rating-value">${model.quality}/5</div>
+                        </div>
+                    </div>
+
+                    <div class="model-features">
+                        <div class="feature-section">
+                            <h5>✨ Best for:</h5>
+                            <div class="feature-list">
+                                ${model.best_for.map(feature => `<span class="feature-tag">${feature}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div class="feature-section">
+                            <h5>⚠️ Limitations:</h5>
+                            <div class="feature-list">
+                                ${model.limitations.map(limitation => `<span class="feature-tag limitation">${limitation}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="model-actions">
+                        <button class="model-select-btn ${isActive ? 'active' : ''}" 
+                                onclick="drew.selectModel('${model.id}')"
+                                ${isActive ? 'disabled' : ''}>
+                            ${isActive ? '✅ Currently Active' : 'Select as Default'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderStars(rating) {
+        return Array.from({length: 5}, (_, i) => 
+            `<div class="star ${i < rating ? 'filled' : ''}"></div>`
+        ).join('');
+    }
+
+    async selectModel(modelId) {
+        try {
+            const response = await fetch('/api/models/select', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ model: modelId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to select model');
+            }
+
+            const result = await response.json();
+            this.showSuccess('Model selection updated successfully!');
+            
+            // Reload the models page to reflect changes
+            this.loadModels();
+
+        } catch (error) {
+            console.error('Error selecting model:', error);
+            this.showError('Failed to update model selection');
+        }
+    }
 }
 
 // Initialize the app when DOM is loaded
 let drew;
 document.addEventListener('DOMContentLoaded', () => {
     drew = new DrewCommandCenter();
+    
+    // Make functions globally available for onclick handlers
+    window.drew = drew;
 });

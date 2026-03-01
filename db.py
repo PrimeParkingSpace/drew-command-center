@@ -104,6 +104,15 @@ def init_db():
         )
     """)
     
+    # Create settings table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key VARCHAR(100) PRIMARY KEY,
+            value TEXT,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    
     # Insert some sample data if tables are empty
     cur.execute("SELECT COUNT(*) FROM tasks")
     task_count = cur.fetchone()[0]
@@ -176,6 +185,16 @@ def init_db():
                 INSERT INTO chat_messages (role, content, channel)
                 VALUES (%s, %s, %s)
             """, (role, content, channel))
+    
+    # Initialize default active model
+    cur.execute("SELECT COUNT(*) FROM settings WHERE key = 'active_model'")
+    settings_count = cur.fetchone()[0]
+    
+    if settings_count == 0:
+        cur.execute("""
+            INSERT INTO settings (key, value)
+            VALUES ('active_model', 'anthropic/claude-opus-4-6')
+        """)
     
     conn.commit()
     cur.close()

@@ -116,6 +116,175 @@ def logout():
 def index():
     return render_template('index.html')
 
+# Models API Endpoints
+
+@app.route('/api/models')
+@require_auth
+def api_models():
+    """Return list of available models with metadata"""
+    models = [
+        {
+            'id': 'anthropic/claude-opus-4-6',
+            'name': 'Claude Opus 4.6',
+            'provider': 'anthropic',
+            'provider_emoji': '🟣',
+            'pricing': {
+                'input': 15.0,
+                'output': 75.0,
+                'cache_read': 1.875,
+                'cache_write': 18.75
+            },
+            'speed': 2,
+            'quality': 5,
+            'best_for': [
+                'Complex reasoning',
+                'Multi-step planning', 
+                'Nuanced judgment',
+                'Architecture decisions',
+                'Tricky debugging'
+            ],
+            'limitations': [
+                'Expensive',
+                'Slower',
+                'Overkill for simple tasks'
+            ],
+            'description': 'The most capable model for complex reasoning and nuanced tasks'
+        },
+        {
+            'id': 'anthropic/claude-sonnet-4-20250514',
+            'name': 'Claude Sonnet 4',
+            'provider': 'anthropic',
+            'provider_emoji': '🟣',
+            'pricing': {
+                'input': 3.0,
+                'output': 15.0,
+                'cache_read': 0.375,
+                'cache_write': 3.75
+            },
+            'speed': 4,
+            'quality': 4,
+            'best_for': [
+                'Code generation',
+                'Data processing',
+                'Routine tasks',
+                'Sub-agent work',
+                'Bulk operations'
+            ],
+            'limitations': [
+                'Less nuanced reasoning than Opus',
+                'May miss subtle context'
+            ],
+            'description': 'Fast and capable for most everyday tasks'
+        },
+        {
+            'id': 'openai/gpt-5.2',
+            'name': 'GPT 5.2',
+            'provider': 'openai',
+            'provider_emoji': '🟢',
+            'pricing': {
+                'input': 2.5,
+                'output': 10.0,
+                'cache_read': 0,
+                'cache_write': 0
+            },
+            'speed': 4,
+            'quality': 4,
+            'best_for': [
+                'Creative writing',
+                'Different perspective',
+                'Broad knowledge',
+                'Catching blind spots'
+            ],
+            'limitations': [
+                'Different personality/style',
+                'Less tool-use reliability'
+            ],
+            'description': 'OpenAI\'s flagship model for creative and diverse thinking'
+        },
+        {
+            'id': 'openai/gpt-5.1-codex',
+            'name': 'GPT 5.1 Codex',
+            'provider': 'openai',
+            'provider_emoji': '🟢',
+            'pricing': {
+                'input': 3.0,
+                'output': 15.0,
+                'cache_read': 0,
+                'cache_write': 0
+            },
+            'speed': 3,
+            'quality': 4.5,
+            'best_for': [
+                'Pure code implementation',
+                'Large refactors',
+                'Code review',
+                'Technical documentation'
+            ],
+            'limitations': [
+                'Code-focused',
+                'Less conversational'
+            ],
+            'description': 'Specialized model optimized for coding tasks'
+        }
+    ]
+    
+    return jsonify(models)
+
+@app.route('/api/models/active')
+@require_auth
+def api_models_active():
+    """Return the currently active model"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    cur.execute("SELECT value FROM settings WHERE key = 'active_model'")
+    result = cur.fetchone()
+    
+    cur.close()
+    conn.close()
+    
+    active_model = result['value'] if result else 'anthropic/claude-opus-4-6'
+    return jsonify({'active_model': active_model})
+
+@app.route('/api/models/select', methods=['POST'])
+@require_auth
+def api_models_select():
+    """Select a model as the default"""
+    data = request.json
+    model_id = data.get('model')
+    
+    if not model_id:
+        return jsonify({'error': 'Model ID is required'}), 400
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Update or insert the active model setting
+    cur.execute("""
+        INSERT INTO settings (key, value, updated_at)
+        VALUES ('active_model', %s, NOW())
+        ON CONFLICT (key) DO UPDATE SET
+        value = EXCLUDED.value,
+        updated_at = EXCLUDED.updated_at
+    """, (model_id,))
+    
+    # Log the model change
+    cur.execute("""
+        INSERT INTO activity_log (action, summary, details, session_type)
+        VALUES (%s, %s, %s, %s)
+    """, (
+        'model_changed',
+        f'Active model changed to {model_id}',
+        json.dumps({'model': model_id}),
+        'web'
+    ))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return jsonify({'success': True, 'active_model': model_id})
+
 # API Endpoints
 
 @app.route('/api/stats')

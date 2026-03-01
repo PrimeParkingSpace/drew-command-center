@@ -50,6 +50,9 @@
                 <button class="nav-item" data-page="stats">
                     <span>📈 Stats</span>
                 </button>
+                <button class="nav-item" data-page="models">
+                    <span>🧠 Models</span>
+                </button>
             </div>
 
             <div style="position: absolute; bottom: 1rem; left: 1rem; right: 1rem;">
@@ -223,6 +226,43 @@
                 
                 <div id="stats-content">
                     <!-- Stats loaded via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Models Page -->
+            <div id="models-page" class="page-section d-none">
+                <h1>🧠 AI Models</h1>
+                
+                <!-- Cost Savings Calculator -->
+                <div class="card" id="cost-savings-card">
+                    <h3>💰 Cost Savings Estimate</h3>
+                    <div id="cost-savings-content">
+                        <!-- Cost savings loaded via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Current Active Model -->
+                <div class="card" id="current-model-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3>🎯 Currently Active Model</h3>
+                        <div class="status-indicator status-active">
+                            <div class="status-dot"></div>
+                            Active
+                        </div>
+                    </div>
+                    <div id="current-model-display">
+                        <!-- Current model loaded via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Available Models -->
+                <div class="card">
+                    <h3>Available Models</h3>
+                    <p class="text-muted">Choose the best model for your needs. Each model has different strengths, speeds, and costs.</p>
+                    
+                    <div id="models-grid" class="models-grid">
+                        <!-- Models loaded via JavaScript -->
+                    </div>
                 </div>
             </div>
         </main>
