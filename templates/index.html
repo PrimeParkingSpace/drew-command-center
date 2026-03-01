@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🦊 Drew Command Center</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#6c5ce7">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Drew Command">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="mobile-menu-toggle">
+            ☰
+        </button>
+
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h1>🦊 Drew</h1>
+                <p class="text-muted">Command Center</p>
+            </div>
+            
+            <div class="nav-menu">
+                <button class="nav-item active" data-page="dashboard">
+                    <span>📊 Dashboard</span>
+                </button>
+                <button class="nav-item" data-page="chat">
+                    <span>💬 Chat</span>
+                </button>
+                <button class="nav-item" data-page="tasks">
+                    <span>📝 Tasks</span>
+                </button>
+                <button class="nav-item" data-page="scheduled">
+                    <span>⏰ Scheduled</span>
+                </button>
+                <button class="nav-item" data-page="activity">
+                    <span>📋 Activity</span>
+                </button>
+                <button class="nav-item" data-page="stats">
+                    <span>📈 Stats</span>
+                </button>
+            </div>
+
+            <div style="position: absolute; bottom: 1rem; left: 1rem; right: 1rem;">
+                <a href="/logout" class="btn btn-secondary" style="width: 100%; text-align: center; font-size: 0.8rem;">
+                    🚪 Logout
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page-section">
+                <h1>Dashboard</h1>
+                
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="active-tasks-count">0</div>
+                        <div class="stat-label">Active Tasks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="completed-today-count">0</div>
+                        <div class="stat-label">Completed Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="scheduled-jobs-count">0</div>
+                        <div class="stat-label">Scheduled Jobs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="messages-today-count">0</div>
+                        <div class="stat-label">Messages Today</div>
+                    </div>
+                </div>
+
+                <!-- Quick Task Entry -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Quick Task</h2>
+                    </div>
+                    <form id="quick-task-form">
+                        <div class="form-group">
+                            <input type="text" 
+                                   id="quick-task-input" 
+                                   class="form-control" 
+                                   placeholder="What needs to be done?"
+                                   required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            ➕ Add Task
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Recent Activity</h2>
+                    </div>
+                    <div id="recent-activity" class="card-body">
+                        <!-- Loaded via JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Page -->
+            <div id="chat-page" class="page-section d-none">
+                <div class="chat-container">
+                    <div class="chat-header">
+                        <h2>🦊 Chat with Drew</h2>
+                        <p class="text-muted">Your AI assistant</p>
+                    </div>
+                    
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- Messages loaded via JavaScript -->
+                    </div>
+
+                    <div class="typing-indicator" id="typing-indicator">
+                        <div class="message-avatar">🦊</div>
+                        <div>
+                            <span>Drew is typing</span>
+                            <div class="typing-dots">
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <form id="chat-form" class="chat-input-form">
+                            <textarea id="chat-input" 
+                                    class="chat-input" 
+                                    placeholder="Message Drew..." 
+                                    rows="1" 
+                                    required></textarea>
+                            <button type="submit" class="chat-send">
+                                ➤
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks Page -->
+            <div id="tasks-page" class="page-section d-none">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h1>Tasks</h1>
+                    <button class="btn btn-primary">
+                        ➕ New Task
+                    </button>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>All Tasks</h2>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-secondary">All</button>
+                            <button class="btn btn-secondary">Queued</button>
+                            <button class="btn btn-secondary">Active</button>
+                            <button class="btn btn-secondary">Completed</button>
+                        </div>
+                    </div>
+                    <div id="tasks-list" class="card-body">
+                        <!-- Tasks loaded via JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheduled Page -->
+            <div id="scheduled-page" class="page-section d-none">
+                <h1>Scheduled Jobs</h1>
+                
+                <div id="scheduled-list">
+                    <!-- Scheduled jobs loaded via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Activity Page -->
+            <div id="activity-page" class="page-section d-none">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h1>Activity Log</h1>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-secondary">All</button>
+                        <button class="btn btn-secondary">Tasks</button>
+                        <button class="btn btn-secondary">Chat</button>
+                        <button class="btn btn-secondary">Cron</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div id="activity-list" class="card-body">
+                        <!-- Activity loaded via JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Page -->
+            <div id="stats-page" class="page-section d-none">
+                <h1>Statistics</h1>
+                
+                <div id="stats-content">
+                    <!-- Stats loaded via JavaScript -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+
+        // Add to home screen prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button
+            const installButton = document.createElement('button');
+            installButton.textContent = '📱 Add to Home Screen';
+            installButton.className = 'btn btn-primary';
+            installButton.style.position = 'fixed';
+            installButton.style.bottom = '20px';
+            installButton.style.right = '20px';
+            installButton.style.zIndex = '1000';
+            
+            installButton.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    deferredPrompt = null;
+                    document.body.removeChild(installButton);
+                }
+            });
+            
+            document.body.appendChild(installButton);
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                if (document.body.contains(installButton)) {
+                    document.body.removeChild(installButton);
+                }
+            }, 10000);
+        });
+    </script>
+</body>
+</html>

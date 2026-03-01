@@ -1,0 +1,438 @@
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from datetime import datetime, timedelta
+import os
+import json
+from db import init_db, get_db_connection
+import psycopg2.extras
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['APP_PASSWORD'] = os.environ.get('APP_PASSWORD', 'drewpeacock')
+
+def require_auth(f):
+    """Decorator to require authentication"""
+    def decorated_function(*args, **kwargs):
+        if not session.get('authenticated'):
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Authentication required'}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password') or request.json.get('password')
+        if password == app.config['APP_PASSWORD']:
+            session['authenticated'] = True
+            return redirect(url_for('index'))
+        return jsonify({'error': 'Invalid password'}), 401
+    
+    return '''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Drew Command Center - Login</title>
+        <style>
+            body { 
+                font-family: system-ui, -apple-system, sans-serif; 
+                background: #0a0a1a; 
+                color: #e0e0e0; 
+                display: flex; 
+                justify-content: center; 
+                align-items: center; 
+                height: 100vh; 
+                margin: 0; 
+            }
+            .login-form { 
+                background: #12122a; 
+                padding: 2rem; 
+                border-radius: 12px; 
+                border: 1px solid #1e2040;
+                min-width: 300px;
+            }
+            .login-form h2 { 
+                text-align: center; 
+                margin-bottom: 1.5rem; 
+                color: #6c5ce7; 
+            }
+            .form-group { 
+                margin-bottom: 1rem; 
+            }
+            .form-group label { 
+                display: block; 
+                margin-bottom: 0.5rem; 
+                color: #8b8fa3; 
+            }
+            .form-group input { 
+                width: 100%; 
+                padding: 0.75rem; 
+                border: 1px solid #1e2040; 
+                border-radius: 8px; 
+                background: #0a0a1a; 
+                color: #e0e0e0; 
+                box-sizing: border-box; 
+            }
+            .btn { 
+                width: 100%; 
+                padding: 0.75rem; 
+                border: none; 
+                border-radius: 8px; 
+                background: #6c5ce7; 
+                color: white; 
+                cursor: pointer; 
+                font-size: 1rem; 
+            }
+            .btn:hover { 
+                background: #5a4fcf; 
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-form">
+            <h2>🦊 Drew Command Center</h2>
+            <form method="POST">
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/logout')
+def logout():
+    session.pop('authenticated', None)
+    return redirect(url_for('login'))
+
+@app.route('/')
+@require_auth
+def index():
+    return render_template('index.html')
+
+# API Endpoints
+
+@app.route('/api/stats')
+@require_auth
+def api_stats():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # Get stats
+    cur.execute("SELECT COUNT(*) FROM tasks WHERE status = 'active'")
+    active_tasks = cur.fetchone()['count']
+    
+    cur.execute("SELECT COUNT(*) FROM tasks WHERE DATE(completed_at) = CURRENT_DATE")
+    completed_today = cur.fetchone()['count']
+    
+    cur.execute("SELECT COUNT(*) FROM scheduled_jobs WHERE status = 'active'")
+    scheduled_jobs = cur.fetchone()['count']
+    
+    cur.execute("SELECT COUNT(*) FROM chat_messages WHERE DATE(timestamp) = CURRENT_DATE")
+    messages_today = cur.fetchone()['count']
+    
+    cur.close()
+    conn.close()
+    
+    return jsonify({
+        'active_tasks': active_tasks,
+        'completed_today': completed_today,
+        'scheduled_jobs': scheduled_jobs,
+        'messages_today': messages_today,
+        'uptime': '99.9%',  # Placeholder
+        'api_calls': 1247,  # Placeholder
+        'cost_today': 4.32  # Placeholder
+    })
+
+@app.route('/api/tasks')
+@require_auth
+def api_tasks():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    status = request.args.get('status')
+    priority = request.args.get('priority')
+    
+    query = "SELECT * FROM tasks WHERE 1=1"
+    params = []
+    
+    if status:
+        query += " AND status = %s"
+        params.append(status)
+    if priority:
+        query += " AND priority = %s"
+        params.append(priority)
+        
+    query += " ORDER BY created_at DESC"
+    
+    cur.execute(query, params)
+    tasks = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    # Convert datetime objects to ISO format
+    for task in tasks:
+        if task['created_at']:
+            task['created_at'] = task['created_at'].isoformat()
+        if task['completed_at']:
+            task['completed_at'] = task['completed_at'].isoformat()
+    
+    return jsonify(tasks)
+
+@app.route('/api/tasks', methods=['POST'])
+@require_auth
+def api_create_task():
+    data = request.json
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    cur.execute("""
+        INSERT INTO tasks (title, description, status, priority, category, notes)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+    """, (
+        data.get('title', ''),
+        data.get('description', ''),
+        data.get('status', 'queued'),
+        data.get('priority', 'normal'),
+        data.get('category', ''),
+        data.get('notes', '')
+    ))
+    
+    task = cur.fetchone()
+    
+    # Log activity
+    cur.execute("""
+        INSERT INTO activity_log (action, summary, details, session_type)
+        VALUES (%s, %s, %s, %s)
+    """, (
+        'task_created',
+        f'Created task: {data.get("title", "")}',
+        json.dumps({'task_id': task['id']}),
+        'web'
+    ))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    if task['created_at']:
+        task['created_at'] = task['created_at'].isoformat()
+    
+    return jsonify(task), 201
+
+@app.route('/api/tasks/<int:task_id>', methods=['PUT'])
+@require_auth
+def api_update_task(task_id):
+    data = request.json
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # Handle completed status
+    completed_at = None
+    if data.get('status') == 'completed':
+        completed_at = datetime.now()
+    
+    cur.execute("""
+        UPDATE tasks 
+        SET title = %s, description = %s, status = %s, priority = %s, 
+            category = %s, notes = %s, completed_at = %s
+        WHERE id = %s RETURNING *
+    """, (
+        data.get('title'),
+        data.get('description'),
+        data.get('status'),
+        data.get('priority'),
+        data.get('category'),
+        data.get('notes'),
+        completed_at,
+        task_id
+    ))
+    
+    task = cur.fetchone()
+    
+    if not task:
+        cur.close()
+        conn.close()
+        return jsonify({'error': 'Task not found'}), 404
+    
+    # Log activity
+    cur.execute("""
+        INSERT INTO activity_log (action, summary, details, session_type)
+        VALUES (%s, %s, %s, %s)
+    """, (
+        'task_updated',
+        f'Updated task: {task["title"]}',
+        json.dumps({'task_id': task_id, 'status': data.get('status')}),
+        'web'
+    ))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    if task['created_at']:
+        task['created_at'] = task['created_at'].isoformat()
+    if task['completed_at']:
+        task['completed_at'] = task['completed_at'].isoformat()
+    
+    return jsonify(task)
+
+@app.route('/api/scheduled')
+@require_auth
+def api_scheduled():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    cur.execute("SELECT * FROM scheduled_jobs ORDER BY next_run ASC")
+    jobs = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    # Convert datetime objects to ISO format
+    for job in jobs:
+        if job['last_run']:
+            job['last_run'] = job['last_run'].isoformat()
+        if job['next_run']:
+            job['next_run'] = job['next_run'].isoformat()
+    
+    return jsonify(jobs)
+
+@app.route('/api/activity')
+@require_auth
+def api_activity():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    limit = request.args.get('limit', 20, type=int)
+    action_filter = request.args.get('action')
+    
+    query = "SELECT * FROM activity_log WHERE 1=1"
+    params = []
+    
+    if action_filter:
+        query += " AND action = %s"
+        params.append(action_filter)
+    
+    query += f" ORDER BY timestamp DESC LIMIT {limit}"
+    
+    cur.execute(query, params)
+    activities = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    # Convert datetime objects to ISO format
+    for activity in activities:
+        if activity['timestamp']:
+            activity['timestamp'] = activity['timestamp'].isoformat()
+    
+    return jsonify(activities)
+
+@app.route('/api/chat/messages')
+@require_auth
+def api_chat_messages():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    limit = request.args.get('limit', 50, type=int)
+    
+    cur.execute("""
+        SELECT * FROM chat_messages 
+        ORDER BY timestamp DESC 
+        LIMIT %s
+    """, (limit,))
+    
+    messages = cur.fetchall()
+    messages.reverse()  # Show oldest first
+    
+    cur.close()
+    conn.close()
+    
+    # Convert datetime objects to ISO format
+    for message in messages:
+        if message['timestamp']:
+            message['timestamp'] = message['timestamp'].isoformat()
+    
+    return jsonify(messages)
+
+@app.route('/api/chat/send', methods=['POST'])
+@require_auth
+def api_chat_send():
+    data = request.json
+    content = data.get('content', '').strip()
+    
+    if not content:
+        return jsonify({'error': 'Message content is required'}), 400
+    
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # Save user message
+    cur.execute("""
+        INSERT INTO chat_messages (role, content, channel, metadata)
+        VALUES (%s, %s, %s, %s) RETURNING *
+    """, ('user', content, 'web', json.dumps({})))
+    
+    user_message = cur.fetchone()
+    
+    # Generate Drew's response (placeholder for now)
+    responses = [
+        "I'm processing that request now! 🦊",
+        "Got it! Let me take care of that for you.",
+        "On it! I'll get back to you with updates.",
+        "Perfect! I'm handling this task now.",
+        "Thanks for the heads up! I'm on this.",
+        "Understood! Working on it right away.",
+        "Roger that! I'll keep you posted on progress.",
+    ]
+    
+    import random
+    drew_response = random.choice(responses)
+    
+    # Save Drew's response
+    cur.execute("""
+        INSERT INTO chat_messages (role, content, channel, metadata)
+        VALUES (%s, %s, %s, %s) RETURNING *
+    """, ('assistant', drew_response, 'web', json.dumps({'avatar': '🦊'})))
+    
+    drew_message = cur.fetchone()
+    
+    # Log chat activity
+    cur.execute("""
+        INSERT INTO activity_log (action, summary, details, session_type)
+        VALUES (%s, %s, %s, %s)
+    """, (
+        'chat',
+        'Chat message exchanged',
+        json.dumps({'user_message': content[:100]}),
+        'web'
+    ))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    # Convert datetime objects to ISO format
+    if user_message['timestamp']:
+        user_message['timestamp'] = user_message['timestamp'].isoformat()
+    if drew_message['timestamp']:
+        drew_message['timestamp'] = drew_message['timestamp'].isoformat()
+    
+    return jsonify({
+        'user_message': user_message,
+        'assistant_message': drew_message
+    })
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
