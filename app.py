@@ -217,6 +217,42 @@ def api_stats():
     """)
     cost_by_model = cur.fetchall()
     
+    # Daily cost with project attribution from activity_log
+    cur.execute("""
+        SELECT c.date, 
+               SUM(c.estimated_cost) as daily_cost,
+               SUM(c.input_tokens) as daily_input,
+               SUM(c.output_tokens) as daily_output,
+               SUM(c.cache_read_tokens) as daily_cache_read,
+               SUM(c.cache_write_tokens) as daily_cache_write,
+               COALESCE(
+                   (SELECT json_agg(DISTINCT a.summary) 
+                    FROM activity_log a 
+                    WHERE DATE(a.timestamp) = c.date 
+                    AND a.action IN ('feature','deploy','milestone','bugfix','config','analysis','research','operations','documentation','cron_created')),
+                   '[]'
+               ) as activities
+        FROM cost_tracking c
+        GROUP BY c.date
+        ORDER BY c.date
+    """)
+    daily_cost_details = cur.fetchall()
+    
+    # Running total
+    running = 0
+    for d in daily_cost_details:
+        running += float(d['daily_cost'])
+        d['running_total'] = round(running, 2)
+        d['daily_cost'] = float(d['daily_cost'])
+        if d['date']:
+            d['date'] = d['date'].isoformat()
+        # Parse activities JSON string if needed
+        if isinstance(d['activities'], str):
+            d['activities'] = json.loads(d['activities'])
+    
+    # Max daily cost for sparkline scaling
+    max_daily = max((d['daily_cost'] for d in daily_cost_details), default=0)
+    
     cur.close()
     conn.close()
     
@@ -253,7 +289,9 @@ def api_stats():
         'avg_daily_cost': float(cost_summary['avg_daily_cost'] or 0),
         'total_tokens': int(cost_summary['total_tokens'] or 0),
         'daily_costs': daily_costs,
-        'cost_by_model': cost_by_model
+        'cost_by_model': cost_by_model,
+        'daily_cost_details': daily_cost_details,
+        'max_daily_cost': max_daily
     })
 
 @app.route('/api/tasks')

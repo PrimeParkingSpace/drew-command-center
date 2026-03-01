@@ -421,9 +421,92 @@ class DrewCommandCenter {
             const response = await fetch('/api/stats');
             const stats = await response.json();
 
-            // Update stats page with enhanced data
             const statsContent = document.getElementById('stats-content');
+            const maxCost = stats.max_daily_cost || 1;
+            const details = stats.daily_cost_details || [];
+            
             statsContent.innerHTML = `
+                <!-- 💰 COST TRACKING — TOP -->
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0;">💰 Anthropic API Costs</h3>
+                        <button onclick="drew.refreshCosts()" class="btn-small" id="refresh-costs-btn">🔄 Refresh from Anthropic</button>
+                    </div>
+                    <div class="stats-grid" style="margin-bottom: 1.5rem;">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color:#ff6b6b;">$${stats.total_estimated_cost.toFixed(2)}</div>
+                            <div class="stat-label">Total Spend</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">$${stats.avg_daily_cost.toFixed(2)}</div>
+                            <div class="stat-label">Daily Average</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${(stats.total_tokens / 1000000).toFixed(1)}M</div>
+                            <div class="stat-label">Total Tokens</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${stats.days_since_first_boot || 0}</div>
+                            <div class="stat-label">Days Running</div>
+                        </div>
+                    </div>
+
+                    <!-- Cost by Model -->
+                    <div class="stats-breakdown" style="margin-bottom: 1.5rem;">
+                        ${(stats.cost_by_model || []).map(model => {
+                            const pct = ((parseFloat(model.cost) / stats.total_estimated_cost) * 100).toFixed(1);
+                            const name = model.model.replace('claude-', '').replace('-20250514', '');
+                            return `
+                            <div class="breakdown-item">
+                                <span><strong>${name}</strong> <span style="color:#8b8fa3">(${pct}%)</span></span>
+                                <span class="breakdown-count" style="color:#6c5ce7;">$${parseFloat(model.cost).toFixed(2)}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+
+                    <!-- Daily Cost Chart -->
+                    <div style="position: relative; height: 250px; margin-bottom: 1.5rem;">
+                        <canvas id="costChart"></canvas>
+                    </div>
+
+                    <!-- Daily Cost Table with Projects -->
+                    <h4 style="margin-bottom: 0.75rem;">📅 Daily Breakdown</h4>
+                    <div style="overflow-x:auto;">
+                        <table class="cost-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Cost</th>
+                                    <th>Running Total</th>
+                                    <th style="width:40px;"></th>
+                                    <th>What Was Built</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${details.map(d => {
+                                    const date = new Date(d.date);
+                                    const dayName = date.toLocaleDateString('en-GB', {weekday:'short'});
+                                    const dateStr = date.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+                                    const barWidth = Math.max(2, (d.daily_cost / maxCost) * 100);
+                                    const activities = (d.activities || []).filter(a => a);
+                                    const actText = activities.length > 0 
+                                        ? activities.slice(0, 3).map(a => a.length > 60 ? a.substring(0,57)+'...' : a).join(' · ')
+                                        : '<span style="color:#555">No major activity logged</span>';
+                                    const costColor = d.daily_cost > 300 ? '#ff6b6b' : d.daily_cost > 150 ? '#ffa94d' : d.daily_cost > 50 ? '#6c5ce7' : '#8b8fa3';
+                                    return `
+                                    <tr>
+                                        <td style="white-space:nowrap;"><strong>${dayName}</strong> ${dateStr}</td>
+                                        <td style="color:${costColor}; font-weight:600; white-space:nowrap;">$${d.daily_cost.toFixed(2)}</td>
+                                        <td style="color:#8b8fa3; white-space:nowrap;">$${d.running_total.toFixed(2)}</td>
+                                        <td><div style="background:${costColor}; height:8px; border-radius:4px; width:${barWidth}%; min-width:3px;"></div></td>
+                                        <td style="font-size:0.85em; color:#b0b0b0;">${actText}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Summary Stats -->
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -439,28 +522,41 @@ class DrewCommandCenter {
                         <div class="stat-label">Chat Messages</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${stats.days_since_first_boot || 0}</div>
-                        <div class="stat-label">Days Since First Boot</div>
+                        <div class="stat-value">${stats.active_tasks || 0}</div>
+                        <div class="stat-label">Active Tasks</div>
                     </div>
                 </div>
 
-                <!-- Task Status Breakdown -->
-                <div class="card">
-                    <h3>Task Status Breakdown</h3>
-                    <div class="stats-breakdown">
-                        ${Object.entries(stats.task_status_breakdown || {}).map(([status, count]) => `
-                            <div class="breakdown-item">
-                                <span class="status-indicator status-${status}">
-                                    <div class="status-dot"></div>
-                                    ${status}
-                                </span>
-                                <span class="breakdown-count">${count}</span>
-                            </div>
-                        `).join('')}
+                <!-- Task Status + Categories side by side -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="card">
+                        <h3>Task Status</h3>
+                        <div class="stats-breakdown">
+                            ${Object.entries(stats.task_status_breakdown || {}).map(([status, count]) => `
+                                <div class="breakdown-item">
+                                    <span class="status-indicator status-${status}">
+                                        <div class="status-dot"></div>
+                                        ${status}
+                                    </span>
+                                    <span class="breakdown-count">${count}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Top Categories</h3>
+                        <div class="stats-breakdown">
+                            ${(stats.active_categories || []).map(cat => `
+                                <div class="breakdown-item">
+                                    <span>${cat.category}</span>
+                                    <span class="breakdown-count">${cat.count}</span>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 </div>
 
-                <!-- Activity Breakdown -->
+                <!-- Activity Breakdown + Weekly Chart -->
                 <div class="card">
                     <h3>Activity Types</h3>
                     <div class="stats-breakdown">
@@ -473,63 +569,9 @@ class DrewCommandCenter {
                     </div>
                 </div>
 
-                <!-- Most Active Categories -->
-                <div class="card">
-                    <h3>Most Active Categories</h3>
-                    <div class="stats-breakdown">
-                        ${(stats.active_categories || []).map(cat => `
-                            <div class="breakdown-item">
-                                <span>${cat.category}</span>
-                                <span class="breakdown-count">${cat.count}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-
-                <!-- Cost Tracking Section -->
-                <div class="card">
-                    <h3>💰 Cost Tracking</h3>
-                    <div class="stats-grid" style="margin-bottom: 1.5rem;">
-                        <div class="stat-card">
-                            <div class="stat-value">$${stats.total_estimated_cost.toFixed(2)}</div>
-                            <div class="stat-label">Total Estimated Spend</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value">$${stats.avg_daily_cost.toFixed(2)}</div>
-                            <div class="stat-label">Average Daily Cost</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value">${(stats.total_tokens / 1000000).toFixed(1)}M</div>
-                            <div class="stat-label">Total Tokens</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value">${(stats.cost_by_model || []).length}</div>
-                            <div class="stat-label">Models Used</div>
-                        </div>
-                    </div>
-
-                    <!-- Cost by Model -->
-                    <h4>Cost by Model</h4>
-                    <div class="stats-breakdown" style="margin-bottom: 1.5rem;">
-                        ${(stats.cost_by_model || []).map(model => `
-                            <div class="breakdown-item">
-                                <span>${model.model}</span>
-                                <span class="breakdown-count">$${parseFloat(model.cost).toFixed(2)}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-
-                    <!-- Daily Cost Chart -->
-                    <h4>Daily Cost Trend</h4>
-                    <div style="position: relative; height: 300px; margin-top: 1rem;">
-                        <canvas id="costChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Weekly Tasks Chart -->
                 <div class="card">
                     <h3>📊 Tasks Completed (Weekly)</h3>
-                    <div style="position: relative; height: 300px; margin-top: 1rem;">
+                    <div style="position: relative; height: 250px; margin-top: 1rem;">
                         <canvas id="weeklyTasksChart"></canvas>
                     </div>
                 </div>
@@ -748,9 +790,28 @@ class DrewCommandCenter {
             }, 300);
         }, 3000);
     }
+    async refreshCosts() {
+        const btn = document.getElementById('refresh-costs-btn');
+        if (btn) { btn.textContent = '⏳ Refreshing...'; btn.disabled = true; }
+        try {
+            const resp = await fetch('/api/costs/refresh', { method: 'POST' });
+            const data = await resp.json();
+            if (data.error) {
+                this.showError('Refresh failed: ' + data.error);
+            } else {
+                this.showSuccess(`Updated! ${data.rows} records, $${data.total_cost} total`);
+                this.loadStats(); // Reload the page
+            }
+        } catch (e) {
+            this.showError('Refresh failed: ' + e.message);
+        } finally {
+            if (btn) { btn.textContent = '🔄 Refresh from Anthropic'; btn.disabled = false; }
+        }
+    }
 }
 
 // Initialize the app when DOM is loaded
+let drew;
 document.addEventListener('DOMContentLoaded', () => {
-    new DrewCommandCenter();
+    drew = new DrewCommandCenter();
 });

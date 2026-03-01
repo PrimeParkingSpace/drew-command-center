@@ -662,3 +662,47 @@ body {
         padding: 0.75rem;
     }
 }
+
+/* Cost table */
+.cost-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+.cost-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #1e2040;
+    color: #8b8fa3;
+    font-weight: 500;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.cost-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(30,32,64,0.5);
+}
+.cost-table tbody tr:hover {
+    background: rgba(108,92,231,0.05);
+}
+
+/* Small button */
+.btn-small {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #6c5ce7;
+    border-radius: 6px;
+    background: transparent;
+    color: #6c5ce7;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s;
+}
+.btn-small:hover {
+    background: #6c5ce7;
+    color: white;
+}
+.btn-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
