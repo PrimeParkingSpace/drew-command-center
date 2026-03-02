@@ -6,32 +6,42 @@ def get_db_connection():
     """Get database connection using Railway's DATABASE_URL or local fallback"""
     database_url = os.environ.get('DATABASE_URL')
     
-    if database_url:
-        # Parse Railway's DATABASE_URL
-        parsed = urlparse(database_url)
-        conn = psycopg2.connect(
-            host=parsed.hostname,
-            port=parsed.port,
-            user=parsed.username,
-            password=parsed.password,
-            database=parsed.path[1:]  # Remove leading slash
-        )
-    else:
-        # Local development fallback
-        conn = psycopg2.connect(
-            host='localhost',
-            port=5432,
-            user='postgres',
-            password='postgres',
-            database='drew_command_center'
-        )
-    
-    return conn
+    try:
+        if database_url:
+            # Parse Railway's DATABASE_URL
+            parsed = urlparse(database_url)
+            conn = psycopg2.connect(
+                host=parsed.hostname,
+                port=parsed.port,
+                user=parsed.username,
+                password=parsed.password,
+                database=parsed.path[1:],  # Remove leading slash
+                connect_timeout=10  # Add timeout
+            )
+        else:
+            # Local development fallback
+            conn = psycopg2.connect(
+                host='localhost',
+                port=5432,
+                user='postgres',
+                password='postgres',
+                database='drew_command_center',
+                connect_timeout=10
+            )
+        return conn
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        return None
 
 def init_db():
     """Initialize database with required tables"""
     conn = get_db_connection()
-    cur = conn.cursor()
+    if conn is None:
+        print("⚠️  Database connection failed, skipping database initialization")
+        return False
+    
+    try:
+        cur = conn.cursor()
     
     # Create tasks table
     cur.execute("""
@@ -196,10 +206,17 @@ def init_db():
             VALUES ('active_model', 'anthropic/claude-opus-4-6')
         """)
     
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Database initialized successfully!")
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("✅ Database initialized successfully!")
+        return True
+    
+    except Exception as e:
+        print(f"❌ Database initialization failed: {e}")
+        if conn:
+            conn.close()
+        return False
 
 if __name__ == '__main__':
     init_db()

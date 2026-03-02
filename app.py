@@ -119,7 +119,42 @@ def index():
         return render_template('index.html')
     except Exception as e:
         print(f"Error rendering index: {e}")
-        return f"<h1>Drew Command Center</h1><p>Loading...</p><script>setTimeout(() => location.reload(), 2000);</script>"
+        # Simple fallback HTML if template fails
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>🦊 Drew Command Center</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { 
+                    font-family: system-ui; 
+                    background: #0a0a1a; 
+                    color: #e0e0e0; 
+                    padding: 2rem; 
+                    text-align: center; 
+                }
+                h1 { color: #6c5ce7; }
+                .btn { 
+                    background: #6c5ce7; 
+                    color: white; 
+                    padding: 1rem 2rem; 
+                    border: none; 
+                    border-radius: 8px; 
+                    text-decoration: none; 
+                    display: inline-block; 
+                    margin: 1rem; 
+                }
+            </style>
+        </head>
+        <body>
+            <h1>🦊 Drew Command Center</h1>
+            <p>System starting up...</p>
+            <a href="/" class="btn">Refresh</a>
+            <script>setTimeout(() => location.reload(), 3000);</script>
+        </body>
+        </html>
+        """
 
 # Models API Endpoints
 
@@ -468,6 +503,16 @@ def api_stats():
         'max_daily_cost': max_daily
     })
 
+def safe_db_operation(operation_func):
+    """Wrapper to safely handle database operations"""
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            return {'error': 'Database connection unavailable', 'data': []}, 503
+        return operation_func(conn)
+    except Exception as e:
+        return {'error': f'Database error: {str(e)}', 'data': []}, 500
+
 @app.route('/api/tasks')
 @require_auth
 def api_tasks():
@@ -768,7 +813,33 @@ def api_chat_send():
         return jsonify({'error': 'Message content is required'}), 400
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if conn is None:
+        # Fallback response when database is unavailable
+        responses = [
+            "I'm having some database connectivity issues right now, but I'm still here! 🦊",
+            "Database is temporarily unavailable, but I can still chat with you!",
+            "System is in maintenance mode, but I'm still listening! 💫"
+        ]
+        
+        return jsonify({
+            'user_message': {
+                'id': 999,
+                'role': 'user',
+                'content': content,
+                'timestamp': datetime.utcnow().isoformat(),
+                'channel': 'web'
+            },
+            'assistant_message': {
+                'id': 1000,
+                'role': 'assistant',
+                'content': responses[hash(content) % len(responses)],
+                'timestamp': datetime.utcnow().isoformat(),
+                'channel': 'web'
+            }
+        })
+    
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     # Save user message
     cur.execute("""
@@ -811,20 +882,42 @@ def api_chat_send():
         'web'
     ))
     
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        # Convert datetime objects to ISO format
+        if user_message['timestamp']:
+            user_message['timestamp'] = user_message['timestamp'].isoformat()
+        if drew_message['timestamp']:
+            drew_message['timestamp'] = drew_message['timestamp'].isoformat()
+        
+        return jsonify({
+            'user_message': user_message,
+            'assistant_message': drew_message
+        })
     
-    # Convert datetime objects to ISO format
-    if user_message['timestamp']:
-        user_message['timestamp'] = user_message['timestamp'].isoformat()
-    if drew_message['timestamp']:
-        drew_message['timestamp'] = drew_message['timestamp'].isoformat()
-    
-    return jsonify({
-        'user_message': user_message,
-        'assistant_message': drew_message
-    })
+    except Exception as e:
+        if conn:
+            conn.close()
+        print(f"Database error in chat: {e}")
+        # Fallback response if database operations fail
+        return jsonify({
+            'user_message': {
+                'id': 999,
+                'role': 'user',
+                'content': content,
+                'timestamp': datetime.utcnow().isoformat(),
+                'channel': 'web'
+            },
+            'assistant_message': {
+                'id': 1000,
+                'role': 'assistant',
+                'content': "I'm having some technical difficulties but I'm still here! 🦊",
+                'timestamp': datetime.utcnow().isoformat(),
+                'channel': 'web'
+            }
+        })
 
 @app.route('/api/upload', methods=['POST'])
 @require_auth
@@ -954,11 +1047,18 @@ def health_check():
     return jsonify({'status': 'ok', 'timestamp': datetime.utcnow().isoformat()})
 
 if __name__ == '__main__':
+    db_available = False
     try:
-        init_db()
-        print("Database initialized successfully")
+        db_available = init_db()
+        if db_available:
+            print("✅ Database initialized successfully")
+        else:
+            print("⚠️  Database unavailable - running in limited mode")
     except Exception as e:
-        print(f"Database initialization failed: {e}")
-        print("App will still start, but database features may not work")
+        print(f"❌ Database initialization failed: {e}")
+        print("⚠️  App will start in limited mode without database features")
+    
+    print(f"🚀 Starting Drew Command Center on port {os.environ.get('PORT', 5000)}")
+    print(f"📊 Database available: {db_available}")
     
     app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
