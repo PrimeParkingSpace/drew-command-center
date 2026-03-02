@@ -341,7 +341,7 @@ class DrewCommandCenter {
                 ${message.role === 'assistant' ? `<div class="message-avatar">🦊</div>` : ''}
                 <div class="message-content">
                     <div class="message-bubble">${this.formatMessageContent(message.content)}</div>
-                    <div class="message-time">${this.formatTime(message.timestamp)}</div>
+                    <div class="message-time">${this.formatTime(message.timestamp)} • ${this.formatDate(message.timestamp)}</div>
                 </div>
                 ${message.role === 'user' ? `<div class="message-avatar">👤</div>` : ''}
             </div>
@@ -765,6 +765,27 @@ class DrewCommandCenter {
         if (!dateString) return '';
         const date = new Date(dateString);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    formatDate(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        
+        if (msgDate.getTime() === today.getTime()) {
+            return 'Today';
+        } else if (msgDate.getTime() === yesterday.getTime()) {
+            return 'Yesterday';
+        } else {
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+        }
     }
 
     formatDateTime(dateString) {
