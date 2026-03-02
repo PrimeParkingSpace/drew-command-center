@@ -15,7 +15,7 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2.1">
 </head>
 <body>
     <div class="app-container">
@@ -281,7 +281,7 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=2.1"></script>
 
     <!-- Service Worker Registration -->
     <script>

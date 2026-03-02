@@ -11,6 +11,13 @@ class DrewCommandCenter {
     init() {
         this.setupEventListeners();
         this.setupMobileMenu();
+        
+        // Force chat page to show on mobile
+        if (window.innerWidth <= 768) {
+            document.getElementById('chat-page').classList.remove('d-none');
+            document.getElementById('dashboard-page').classList.add('d-none');
+        }
+        
         this.loadPage('chat');
         
         // Auto-refresh dashboard stats every 30 seconds

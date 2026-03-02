@@ -61,44 +61,68 @@ body {
     .main-content {
         margin-left: 0;
         padding: 0;
+        padding-top: 4rem;
+        min-height: 100vh;
+    }
+    
+    /* Ensure page titles don't overlap with menu button */
+    .main-content h1 {
+        margin-left: 3rem;
+        margin-top: 0;
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
     }
     
     /* Chat mobile optimizations */
     .chat-container {
-        height: 100vh;
+        height: calc(100vh - 4rem);
         border-radius: 0;
+        border: none;
+        margin: 0;
     }
     
     .chat-messages {
-        height: calc(100vh - 200px);
-        padding: 0.5rem;
+        height: calc(100vh - 300px);
+        padding: 0.75rem;
+        max-height: none;
     }
     
     .chat-input-container {
         border-radius: 0;
-        padding: 0.75rem;
+        padding: 1rem;
         border-left: none;
         border-right: none;
         border-bottom: none;
+        position: sticky;
+        bottom: 0;
+        background: #12122a;
     }
     
     .input-row {
         flex-direction: row;
         align-items: flex-end;
+        gap: 0.5rem;
     }
     
     .message-bubble {
         max-width: 85%;
         font-size: 0.9rem;
+        padding: 0.65rem 0.9rem;
     }
     
     .chat-header {
-        padding: 0.75rem;
+        padding: 1rem;
+        padding-top: 0.5rem;
         border-bottom: 1px solid #1e2040;
     }
     
+    .chat-header h2 {
+        font-size: 1.3rem;
+        margin-bottom: 0.25rem;
+    }
+    
     .chat-search-container {
-        margin-top: 0.5rem;
+        margin-top: 0.75rem;
     }
     
     .file-preview {
@@ -108,6 +132,32 @@ body {
     
     .file-preview-item {
         padding: 0.4rem;
+    }
+    
+    /* Stats grid mobile adjustment */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    
+    .stat-card {
+        padding: 1rem;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+    }
+}
+
+/* Force chat to be visible on load for mobile */
+@media (max-width: 768px) {
+    #chat-page {
+        display: block !important;
+    }
+    
+    #dashboard-page {
+        display: none !important;
     }
 }
 
@@ -160,18 +210,43 @@ body {
     position: fixed;
     top: 1rem;
     left: 1rem;
-    z-index: 200;
+    z-index: 1000;
     background: #6c5ce7;
     color: white;
     border: none;
-    padding: 0.5rem;
+    padding: 0.65rem;
     border-radius: 8px;
     cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    font-size: 1rem;
+    line-height: 1;
 }
 
 @media (max-width: 768px) {
     .mobile-menu-toggle {
         display: block;
+        position: fixed;
+        top: 0.75rem;
+        left: 0.75rem;
+        z-index: 1000;
+        background: #6c5ce7;
+        color: white;
+        border: none;
+        padding: 0.65rem;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    
+    /* Add padding to main content to avoid overlap */
+    .main-content {
+        padding-top: 4rem;
+    }
+    
+    /* Ensure page titles don't overlap with menu button */
+    h1 {
+        margin-left: 3rem;
+        margin-top: 0;
     }
 }
 
