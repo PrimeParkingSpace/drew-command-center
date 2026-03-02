@@ -114,7 +114,12 @@ def logout():
 @app.route('/')
 @require_auth
 def index():
-    return render_template('index.html')
+    """Main dashboard page"""
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        print(f"Error rendering index: {e}")
+        return f"<h1>Drew Command Center</h1><p>Loading...</p><script>setTimeout(() => location.reload(), 2000);</script>"
 
 # Models API Endpoints
 
@@ -943,6 +948,17 @@ def api_costs_refresh():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Railway"""
+    return jsonify({'status': 'ok', 'timestamp': datetime.utcnow().isoformat()})
+
 if __name__ == '__main__':
-    init_db()
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    try:
+        init_db()
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+        print("App will still start, but database features may not work")
+    
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
