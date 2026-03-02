@@ -1,9 +1,24 @@
 import os
-import psycopg2
 from urllib.parse import urlparse
+
+# Try to import psycopg2, but don't crash if it's not available
+try:
+    import psycopg2
+    import psycopg2.extras
+    POSTGRES_AVAILABLE = True
+    print("✅ PostgreSQL libraries loaded successfully")
+except ImportError as e:
+    print(f"⚠️  PostgreSQL libraries not available: {e}")
+    print("⚠️  App will run in database-free mode")
+    psycopg2 = None
+    POSTGRES_AVAILABLE = False
 
 def get_db_connection():
     """Get database connection using Railway's DATABASE_URL or local fallback"""
+    if not POSTGRES_AVAILABLE:
+        print("⚠️  PostgreSQL not available, skipping database connection")
+        return None
+        
     database_url = os.environ.get('DATABASE_URL')
     
     try:

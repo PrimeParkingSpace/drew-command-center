@@ -2,8 +2,22 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 from datetime import datetime, timedelta
 import os
 import json
-from db import init_db, get_db_connection
-import psycopg2.extras
+from db import init_db, get_db_connection, POSTGRES_AVAILABLE
+
+# Only import psycopg2 if it's available
+if POSTGRES_AVAILABLE:
+    import psycopg2.extras
+else:
+    print("⚠️  Running without PostgreSQL support")
+
+def get_cursor(conn):
+    """Get a database cursor with proper error handling"""
+    if not conn or not POSTGRES_AVAILABLE:
+        return None
+    try:
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    except Exception:
+        return conn.cursor()  # Fallback to regular cursor
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -275,7 +289,7 @@ def api_models():
 def api_models_active():
     """Return the currently active model"""
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     cur.execute("SELECT value FROM settings WHERE key = 'active_model'")
     result = cur.fetchone()
@@ -331,7 +345,7 @@ def api_models_select():
 @require_auth
 def api_stats():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     # Basic counts
     cur.execute("SELECT COUNT(*) FROM tasks WHERE status = 'active'")
@@ -517,7 +531,7 @@ def safe_db_operation(operation_func):
 @require_auth
 def api_tasks():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     status = request.args.get('status')
     priority = request.args.get('priority')
@@ -555,7 +569,7 @@ def api_create_task():
     data = request.json
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     cur.execute("""
         INSERT INTO tasks (title, description, status, priority, category, notes)
@@ -597,7 +611,7 @@ def api_update_task(task_id):
     data = request.json
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     # Handle completed status
     completed_at = None
@@ -653,7 +667,7 @@ def api_update_task(task_id):
 @require_auth
 def api_scheduled():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     cur.execute("SELECT * FROM scheduled_jobs ORDER BY next_run ASC")
     jobs = cur.fetchall()
@@ -674,7 +688,7 @@ def api_scheduled():
 @require_auth
 def api_activity():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     limit = request.args.get('limit', 20, type=int)
     action_filter = request.args.get('action')
@@ -749,7 +763,7 @@ def api_chat_live_send():
 @require_auth
 def api_chat_messages():
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     limit = request.args.get('limit', 50, type=int)
     
@@ -781,7 +795,7 @@ def api_chat_search():
         return jsonify([])
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur = get_cursor(conn)
     
     # Search chat messages using ILIKE for case-insensitive search
     cur.execute("""
@@ -839,7 +853,7 @@ def api_chat_send():
         })
     
     try:
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur = get_cursor(conn)
     
     # Save user message
     cur.execute("""
