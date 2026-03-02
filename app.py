@@ -821,6 +821,41 @@ def api_chat_send():
         'assistant_message': drew_message
     })
 
+@app.route('/api/upload', methods=['POST'])
+@require_auth
+def api_upload():
+    """Handle file uploads"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    # Create uploads directory if it doesn't exist
+    upload_dir = os.path.join('static', 'uploads')
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Generate unique filename to avoid conflicts
+    import uuid
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(upload_dir, unique_filename)
+    
+    try:
+        file.save(file_path)
+        
+        # Return file info
+        return jsonify({
+            'success': True,
+            'filename': file.filename,
+            'path': f"/static/uploads/{unique_filename}",
+            'size': os.path.getsize(file_path),
+            'type': file.content_type or 'application/octet-stream'
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to save file: {str(e)}'}), 500
+
 @app.route('/api/costs/refresh', methods=['POST'])
 @require_auth
 def api_costs_refresh():

@@ -2,15 +2,16 @@
 
 class DrewCommandCenter {
     constructor() {
-        this.currentPage = 'dashboard';
+        this.currentPage = 'chat';
         this.allChatMessages = []; // Store all messages for filtering
+        this.selectedFiles = []; // Store selected files for upload
         this.init();
     }
 
     init() {
         this.setupEventListeners();
         this.setupMobileMenu();
-        this.loadPage('dashboard');
+        this.loadPage('chat');
         
         // Auto-refresh dashboard stats every 30 seconds
         setInterval(() => {
@@ -61,6 +62,14 @@ class DrewCommandCenter {
         if (chatSearch) {
             chatSearch.addEventListener('input', (e) => {
                 this.filterChatMessages(e.target.value);
+            });
+        }
+
+        // File upload functionality
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                this.handleFileSelection(e);
             });
         }
     }
@@ -351,19 +360,46 @@ class DrewCommandCenter {
     async sendMessage() {
         const chatInput = document.getElementById('chat-input');
         const message = chatInput.value.trim();
-        if (!message) return;
+        
+        // Allow sending if either message or files are present
+        if (!message && (!this.selectedFiles || this.selectedFiles.length === 0)) return;
 
+        // Clear input and files
         chatInput.value = '';
         this.autoResizeTextarea(chatInput);
+        
+        // Handle file uploads first if any
+        let uploadedFiles = [];
+        if (this.selectedFiles && this.selectedFiles.length > 0) {
+            try {
+                uploadedFiles = await this.uploadFiles(this.selectedFiles);
+            } catch (error) {
+                this.showError('Failed to upload files');
+                return;
+            }
+            
+            // Clear selected files after upload
+            this.selectedFiles = [];
+            this.displayFilePreview([]);
+            document.getElementById('file-input').value = '';
+        }
 
         if (this.chatSource === 'live') {
             // Send to OpenClaw via Mac server
             this.showTypingIndicator();
             try {
+                const messageToSend = message || (uploadedFiles.length > 0 ? 'File(s) uploaded' : '');
+                const requestData = { message: messageToSend };
+                
+                // Include file information if any were uploaded
+                if (uploadedFiles.length > 0) {
+                    requestData.files = uploadedFiles;
+                }
+                
                 await fetch('/api/chat/live/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
+                    body: JSON.stringify(requestData)
                 });
                 // Response will appear via polling — Drew will reply through OpenClaw
                 // Hide typing after 30s max (polling will show the real response)
@@ -376,10 +412,19 @@ class DrewCommandCenter {
             // Fallback to stored chat
             this.showTypingIndicator();
             try {
+                const messageData = {
+                    content: message || 'File(s) uploaded'
+                };
+                
+                // Include file information if any were uploaded
+                if (uploadedFiles.length > 0) {
+                    messageData.files = uploadedFiles;
+                }
+                
                 const response = await fetch('/api/chat/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: message })
+                    body: JSON.stringify(messageData)
                 });
                 const result = await response.json();
                 this.addMessageToChat(result.user_message);
@@ -392,6 +437,80 @@ class DrewCommandCenter {
                 this.showError('Failed to send message');
             }
         }
+    }
+
+    handleFileSelection(event) {
+        const files = Array.from(event.target.files);
+        this.selectedFiles = files;
+        this.displayFilePreview(files);
+    }
+
+    displayFilePreview(files) {
+        const preview = document.getElementById('file-preview');
+        preview.innerHTML = '';
+
+        files.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-preview-item';
+            
+            const fileName = document.createElement('span');
+            fileName.className = 'file-name';
+            fileName.textContent = file.name;
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'file-remove-btn';
+            removeBtn.textContent = '✕';
+            removeBtn.onclick = () => this.removeFile(index);
+            
+            fileItem.appendChild(fileName);
+            fileItem.appendChild(removeBtn);
+            preview.appendChild(fileItem);
+        });
+
+        // Show preview if files exist
+        if (files.length > 0) {
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    }
+
+    removeFile(index) {
+        this.selectedFiles.splice(index, 1);
+        this.displayFilePreview(this.selectedFiles);
+        
+        // Update file input
+        const fileInput = document.getElementById('file-input');
+        if (this.selectedFiles.length === 0) {
+            fileInput.value = '';
+        }
+    }
+
+    async uploadFiles(files) {
+        if (!files || files.length === 0) return [];
+
+        const uploadPromises = files.map(async (file) => {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                throw error;
+            }
+        });
+
+        return Promise.all(uploadPromises);
     }
 
     addMessageToChat(message) {

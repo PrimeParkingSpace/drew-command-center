@@ -32,10 +32,10 @@
             </div>
             
             <div class="nav-menu">
-                <button class="nav-item active" data-page="dashboard">
+                <button class="nav-item" data-page="dashboard">
                     <span>📊 Dashboard</span>
                 </button>
-                <button class="nav-item" data-page="chat">
+                <button class="nav-item active" data-page="chat">
                     <span>💬 Chat</span>
                 </button>
                 <button class="nav-item" data-page="tasks">
@@ -65,7 +65,7 @@
         <!-- Main Content -->
         <main class="main-content">
             <!-- Dashboard Page -->
-            <div id="dashboard-page" class="page-section">
+            <div id="dashboard-page" class="page-section d-none">
                 <h1>Dashboard</h1>
                 
                 <!-- Stats Grid -->
@@ -119,7 +119,7 @@
             </div>
 
             <!-- Chat Page -->
-            <div id="chat-page" class="page-section d-none">
+            <div id="chat-page" class="page-section">
                 <div class="chat-container">
                     <div class="chat-header">
                         <h2>🦊 Chat with Drew</h2>
@@ -153,15 +153,28 @@
                     </div>
                     
                     <div class="chat-input-container">
-                        <form id="chat-form" class="chat-input-form">
-                            <textarea id="chat-input" 
-                                    class="chat-input" 
-                                    placeholder="Message Drew..." 
-                                    rows="1" 
-                                    required></textarea>
-                            <button type="submit" class="chat-send">
-                                ➤
-                            </button>
+                        <form id="chat-form" class="chat-input-form" enctype="multipart/form-data">
+                            <div class="input-row">
+                                <div class="file-upload-section">
+                                    <input type="file" 
+                                           id="file-input" 
+                                           class="file-input" 
+                                           accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.json" 
+                                           multiple>
+                                    <button type="button" class="file-upload-btn" onclick="document.getElementById('file-input').click()">
+                                        📎
+                                    </button>
+                                </div>
+                                <textarea id="chat-input" 
+                                        class="chat-input" 
+                                        placeholder="Message Drew..." 
+                                        rows="1" 
+                                        required></textarea>
+                                <button type="submit" class="chat-send">
+                                    ➤
+                                </button>
+                            </div>
+                            <div id="file-preview" class="file-preview"></div>
                         </form>
                     </div>
                 </div>
