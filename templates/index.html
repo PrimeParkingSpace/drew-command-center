@@ -15,7 +15,7 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?{{ cache_bust }}">
 </head>
 <body>
     <div class="app-container">
@@ -35,7 +35,7 @@
                 <button class="nav-item" data-page="dashboard">
                     <span>📊 Dashboard</span>
                 </button>
-                <button class="nav-item active" data-page="chat">
+                <button class="nav-item" data-page="chat">
                     <span>💬 Chat</span>
                 </button>
                 <button class="nav-item" data-page="tasks">
@@ -47,8 +47,11 @@
                 <button class="nav-item" data-page="activity">
                     <span>📋 Activity</span>
                 </button>
-                <button class="nav-item" data-page="stats">
+                <button class="nav-item active" data-page="stats">
                     <span>📈 Stats</span>
+                </button>
+                <button class="nav-item" data-page="costs">
+                    <span>💰 Costs</span>
                 </button>
                 <button class="nav-item" data-page="models">
                     <span>🧠 Models</span>
@@ -86,6 +89,10 @@
                         <div class="stat-value" id="messages-today-count">0</div>
                         <div class="stat-label">Messages Today</div>
                     </div>
+                    <div class="stat-card" id="api-cost-tile">
+                        <div class="stat-value" style="color:#febc2e">💰</div>
+                        <div class="stat-label">API Costs</div>
+                    </div>
                 </div>
 
                 <!-- Quick Task Entry -->
@@ -119,11 +126,16 @@
             </div>
 
             <!-- Chat Page -->
-            <div id="chat-page" class="page-section">
+            <div id="chat-page" class="page-section d-none">
                 <div class="chat-container">
                     <div class="chat-header">
-                        <h2>🦊 Chat with Drew</h2>
-                        <p class="text-muted">Your AI assistant</p>
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+                            <div>
+                                <h2 style="margin:0">🦊 Chat with Drew</h2>
+                                <p class="text-muted" style="margin:0" id="chat-message-count">Loading...</p>
+                            </div>
+                            <div id="chat-date-nav" style="display:flex;gap:0.5rem;align-items:center"></div>
+                        </div>
                         
                         <!-- Search Bar -->
                         <div class="chat-search-container">
@@ -233,8 +245,16 @@
                 </div>
             </div>
 
+            <!-- Costs Page -->
+            <div id="costs-page" class="page-section d-none">
+                <h1>💰 Project Costs</h1>
+                <div id="costs-content">
+                    <!-- Costs loaded via JavaScript -->
+                </div>
+            </div>
+
             <!-- Stats Page -->
-            <div id="stats-page" class="page-section d-none">
+            <div id="stats-page" class="page-section">
                 <h1>Statistics</h1>
                 
                 <div id="stats-content">
@@ -281,7 +301,24 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}?v=2.1"></script>
+    <!-- Desktop/Mobile Toggle -->
+    <button class="desktop-mode-toggle" id="desktop-toggle" onclick="toggleDesktopMode()">🖥️ Desktop</button>
+    <script>
+        function toggleDesktopMode() {
+            const body = document.body;
+            const btn = document.getElementById('desktop-toggle');
+            body.classList.toggle('force-desktop');
+            if (body.classList.contains('force-desktop')) {
+                btn.textContent = '📱 Mobile';
+                // Reset viewport for desktop rendering
+                document.querySelector('meta[name=viewport]').content = 'width=1400';
+            } else {
+                btn.textContent = '🖥️ Desktop';
+                document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1.0, user-scalable=no';
+            }
+        }
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}?{{ cache_bust }}"></script>
 
     <!-- Service Worker Registration -->
     <script>

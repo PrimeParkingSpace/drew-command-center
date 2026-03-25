@@ -46,6 +46,8 @@ body {
     margin-left: 250px;
     padding: 1rem;
     background: #0a0a1a;
+    height: 100vh;
+    overflow-y: auto;
 }
 
 /* Mobile responsiveness */
@@ -150,15 +152,55 @@ body {
     }
 }
 
-/* Force chat to be visible on load for mobile */
+/* Desktop mode toggle for mobile */
+.desktop-mode-toggle {
+    display: none;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 1001;
+    background: #6c5ce7;
+    color: white;
+    border: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    font-weight: 600;
+}
+
 @media (max-width: 768px) {
-    #chat-page {
-        display: block !important;
+    .desktop-mode-toggle {
+        display: block;
     }
-    
-    #dashboard-page {
-        display: none !important;
-    }
+}
+
+/* When desktop mode is forced on mobile */
+body.force-desktop .app-container {
+    min-width: 1200px;
+    overflow-x: auto;
+}
+
+body.force-desktop .sidebar {
+    transform: translateX(0) !important;
+}
+
+body.force-desktop .main-content {
+    margin-left: 250px !important;
+    padding: 1rem !important;
+    padding-top: 1rem !important;
+}
+
+body.force-desktop .mobile-menu-toggle {
+    display: none !important;
+}
+
+body.force-desktop .desktop-mode-toggle {
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 1001;
 }
 
 /* Sidebar */
@@ -1236,6 +1278,83 @@ body {
     margin-top: 0.5rem;
 }
 
+/* KPI Row */
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.kpi-tile {
+    background: linear-gradient(135deg, #12122a 0%, #1a1a3a 100%);
+    border: 1px solid #1e2040;
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.kpi-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.kpi-label {
+    color: #8b8fa3;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+}
+
+/* Chart cards */
+.chart-card {
+    overflow: hidden;
+}
+
+.chart-container {
+    padding: 0.5rem;
+    overflow-x: auto;
+}
+
+.chart-container svg {
+    display: block;
+}
+
+/* Model breakdown responsive */
+.model-breakdown-grid {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .model-breakdown-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .kpi-value {
+        font-size: 1.4rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+    .kpi-tile {
+        padding: 0.75rem;
+    }
+    .kpi-value {
+        font-size: 1.2rem;
+    }
+}
+
 /* Responsive adjustments for models */
 @media (max-width: 768px) {
     .models-grid {
@@ -1266,4 +1385,22 @@ body {
         flex-direction: column;
         text-align: center;
     }
+}
+/* Date select dropdown */
+.chat-date-select {
+    background: #1e2040;
+    color: #e0e0e0;
+    border: 1px solid #2a2d5a;
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    outline: none;
+    cursor: pointer;
+}
+.chat-date-select:focus {
+    border-color: #6c5ce7;
+}
+.chat-date-select option {
+    background: #12122a;
+    color: #e0e0e0;
 }
